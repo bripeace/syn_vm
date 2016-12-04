@@ -1,110 +1,158 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
+#include <stdbool.h>
+
 #include "inst.h"
 
 #define NUM_REG 8
-#define STACK_SIZE 1024
-//static int stack_size = STACK_SIZE;
+
 //static const int reg_count = NUM_REG;
+
 static int r[NUM_REG];
-static int *stack;
-static int *mem;
-static int run = 1;
+
+static uint16_t *stack;
+static uint16_t stack_size = 1024;
+
+static uint16_t *mem;
+
+static bool run = 1;
 
 #define MAX_INT 32767
-#define WORD 2
-
 
 void print_regs()
 {
-    for (int i = 0; i < NUM_REG; ++i)
-    {
+    for (int i = 0; i < NUM_REG; ++i) {
+    
         printf("r%1d: %d\n",i, r[i]);
     }
 }
 
-void vm_push(int i)
+void grow_stack(uint16_t *sp)
 {
+        // stack may move save stackpoint offset
+        size_t sp_offset = sp-stack;
 
+        printf("Growing Stack %zu\n",sp-stack);
+
+        stack_size += 256;
+
+        void *new_stack = NULL;
+        if ((new_stack = realloc(stack, stack_size * sizeof *stack)))
+        {
+            stack = new_stack;
+            sp = stack + sp_offset;
+        }
+        else
+        {
+            // couldn't grow stack
+            run = 0;
+        }
+
+}
+void vm_push(uint16_t i)
+{
+    static uint16_t *sp = NULL;
+
+    if (sp == NULL) {
+        sp = stack;
+    }
+
+    if (sp+1-stack >= stack_size)
+    {
+        grow_stack(sp);
+    }
+
+    *sp = i;
+
+    ++sp;
 }
 
 void setup_mem()
 {
-    int i = 0;
-    for(i = 0; i < 100; ++i)
+    
+    for(int i = 0; i < 100; ++i)
     {
-        stack[i] = noop;
+        vm_push(noop);
     }
-    stack[i] = out;
-    stack[i+1] = 'b';
-    stack[i+2] = out;
-    stack[i+3] = 'r';
-    stack[i+4] = out;
-    stack[i+5] = 'a';
-    stack[i+6] = out;
-    stack[i+7] = 'v';
-    stack[i+8] = out;
-    stack[i+9] = 'e';
-    stack[i+10] = out;
-    stack[i+11] = 's';
-    stack[i+12] = out;
-    stack[i+13] = '\n';
+    vm_push(out);
+    vm_push('b');
+    vm_push(out);
+    vm_push('\n');
+    for (int i = 0; i < 921; i++)
+        vm_push(noop);
+    vm_push(halt);
 }
 
 int fetch()
 {
-    static int *sp = NULL;
+    static uint16_t *sp = NULL;
 
-    if (sp == NULL)
-    {
+    if (sp == NULL || sp-stack > stack_size) {
         sp = stack;
     }
 
-    int ret = *sp;
     ++sp;
-    return ret;
+    return *(sp-1);
+}
+
+void inst_out()
+{
+    printf("%c", fetch());
 }
 
 void exec (instruction i)
 {
-    switch(i)
-    {
+    switch(i) {
+
         case halt:
             run = 0;
-        break;
-        case noop:
-         //   printf("noop\n");
-        break;
+            break;
+
         case out:
-            printf("%c",fetch());
-        break;
+            inst_out();
+            break;
+
         default:
-        break;
+        case noop:
+            break;
     }
 
 }
 
 void run_vm()
 {
-    while (run)
-    {
+    while (run) {
+
         instruction inst = fetch();
         exec(inst);
     }
 
 }
+
 int main(int argc, const char **argv)
 {
 
-    mem = calloc(MAX_INT + 1, WORD);
-    stack = calloc(1024, WORD);
+    
+    mem = calloc(MAX_INT + 1, sizeof *mem);
+    stack = calloc(stack_size, sizeof *stack);
     
     print_regs();
     
     printf("Mem base: %p\n", (void *)mem);
     printf("Stack   : %p\n", (void *)stack);
 
-    setup_mem();
+    const char *exec_str = NULL;
+    if (argc > 1) {
+        exec_str = argv[1];
+    }
+    else {
+        setup_mem();
+    }
+    
     run_vm();
+
+    free(mem);
+    free(stack);
 }
 
