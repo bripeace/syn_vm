@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.0)
+project(vm)
+enable_testing()
+set(CMAKE_C_FLAGS "-g -Wall -Werror -Wextra -Wpedantic")
+add_subdirectory(test)
+add_library(vml vm.c)
+set_target_properties(vml PROPERTIES OUTPUT_NAME "vm")
+add_executable(vm vm.c)

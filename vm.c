@@ -145,8 +145,9 @@ int main(int argc, const char **argv)
     const char *exec_str = NULL;
     if (argc > 1) {
         exec_str = argv[1];
+        printf ("%s\n",exec_str);
     }
-    else {
+    else { 
         setup_mem();
     }
     
