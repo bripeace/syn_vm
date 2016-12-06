@@ -4,6 +4,7 @@
 #include <stdbool.h>
 
 #include "inst.h"
+#include "test.h"
 
 #define NUM_REG 8
 
@@ -132,8 +133,6 @@ void run_vm()
 
 int main(int argc, const char **argv)
 {
-
-    
     mem = calloc(MAX_INT + 1, sizeof *mem);
     stack = calloc(stack_size, sizeof *stack);
     
@@ -155,5 +154,7 @@ int main(int argc, const char **argv)
 
     free(mem);
     free(stack);
+    
+    return 0;
 }
 
