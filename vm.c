@@ -24,31 +24,27 @@ static bool run = 1;
 void print_regs()
 {
     for (int i = 0; i < NUM_REG; ++i) {
-    
         printf("r%1d: %d\n",i, r[i]);
     }
 }
 
 void grow_stack(uint16_t *sp)
 {
-        // stack may move save stackpoint offset
-        size_t sp_offset = sp-stack;
+    // stack may move save stackpoint offset
+    size_t sp_offset = sp-stack;
 
-        printf("Growing Stack %zu\n",sp-stack);
+    printf("Growing Stack %zu\n",sp-stack);
 
-        stack_size += 256;
+    stack_size += 256;
 
-        void *new_stack = NULL;
-        if ((new_stack = realloc(stack, stack_size * sizeof *stack)))
-        {
-            stack = new_stack;
-            sp = stack + sp_offset;
-        }
-        else
-        {
-            // couldn't grow stack
-            run = 0;
-        }
+    void *new_stack = NULL;
+    if ((new_stack = realloc(stack, stack_size * sizeof *stack))) {
+        stack = new_stack;
+        sp = stack + sp_offset;
+    }  else  {
+        // couldn't grow stack
+        run = 0;
+    }
 
 }
 void vm_push(uint16_t i)
@@ -59,8 +55,7 @@ void vm_push(uint16_t i)
         sp = stack;
     }
 
-    if (sp+1-stack >= stack_size)
-    {
+    if (sp+1-stack >= stack_size) {
         grow_stack(sp);
     }
 
@@ -71,17 +66,17 @@ void vm_push(uint16_t i)
 
 void setup_mem()
 {
-    
-    for(int i = 0; i < 100; ++i)
-    {
+
+    for(int i = 0; i < 100; ++i) {
         vm_push(noop);
     }
     vm_push(out);
     vm_push('b');
     vm_push(out);
     vm_push('\n');
-    for (int i = 0; i < 921; i++)
+    for (int i = 0; i < 921; i++) {
         vm_push(noop);
+    }
     vm_push(halt);
 }
 
@@ -124,7 +119,6 @@ void exec (instruction i)
 void run_vm()
 {
     while (run) {
-
         instruction inst = fetch();
         exec(inst);
     }
@@ -135,9 +129,9 @@ int main(int argc, const char **argv)
 {
     mem = calloc(MAX_INT + 1, sizeof *mem);
     stack = calloc(stack_size, sizeof *stack);
-    
+
     print_regs();
-    
+
     printf("Mem base: %p\n", (void *)mem);
     printf("Stack   : %p\n", (void *)stack);
 
@@ -145,16 +139,15 @@ int main(int argc, const char **argv)
     if (argc > 1) {
         exec_str = argv[1];
         printf ("%s\n",exec_str);
-    }
-    else { 
+    } else { 
         setup_mem();
     }
-    
+
     run_vm();
 
     free(mem);
     free(stack);
-    
+
     return 0;
 }
 
