@@ -9,13 +9,14 @@
 #include "test.h"
 
 #define NUM_REG 8
+#define STACK_CHUNK 256
 
 //static const int reg_count = NUM_REG;
 
 static int r[NUM_REG];
 
 static uint16_t *stack;
-static uint16_t stack_size = 1024;
+static uint16_t stack_size = 2 * STACK_CHUNK; 
 
 static uint16_t *mem;
 
@@ -35,15 +36,13 @@ bool grow_stack(uint16_t **sp)
     // stack may move save stackpoint offset
     size_t sp_offset = *sp-stack;
 
-    printf("Growing Stack %zu\n",sp_offset);
-
-    if (stack_size > UINT16_MAX -  256) {
+    if (stack_size > UINT16_MAX -  STACK_CHUNK) {
         //overflow
         errno = ENOMEM;
         return false;
     }
 
-    stack_size += 256;
+    stack_size += STACK_CHUNK;
 
     uint16_t *new_stack = realloc(stack, stack_size * sizeof *stack);
     if (!new_stack) {
