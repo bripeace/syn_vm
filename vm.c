@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <errno.h>
+#include <limits.h>
 
 #include "inst.h"
 #include "test.h"
@@ -28,25 +30,34 @@ void print_regs()
     }
 }
 
-void grow_stack(uint16_t *sp)
+bool grow_stack(uint16_t **sp)
 {
     // stack may move save stackpoint offset
-    size_t sp_offset = sp-stack;
+    size_t sp_offset = *sp-stack;
 
-    printf("Growing Stack %zu\n",sp-stack);
+    printf("Growing Stack %zu\n",sp_offset);
+
+    if (stack_size > UINT16_MAX -  256) {
+        //overflow
+        errno = ENOMEM;
+        return false;
+    }
 
     stack_size += 256;
 
-    void *new_stack = NULL;
-    if ((new_stack = realloc(stack, stack_size * sizeof *stack))) {
-        stack = new_stack;
-        sp = stack + sp_offset;
-    }  else  {
+    uint16_t *new_stack = realloc(stack, stack_size * sizeof *stack);
+    if (!new_stack) {
         // couldn't grow stack
-        run = 0;
+        errno = ENOMEM;
+        return false;
     }
 
+    stack = new_stack;
+    *sp = stack + sp_offset;
+    return true;
+
 }
+
 void vm_push(uint16_t i)
 {
     static uint16_t *sp = NULL;
@@ -55,13 +66,11 @@ void vm_push(uint16_t i)
         sp = stack;
     }
 
-    if (sp+1-stack >= stack_size) {
-        grow_stack(sp);
+    if (sp-stack >= stack_size) {
+        grow_stack(&sp);
     }
 
-    *sp = i;
-
-    ++sp;
+    *sp++ = i;
 }
 
 void setup_mem()
