@@ -10,6 +10,9 @@
 
 #define NUM_REG 8
 #define STACK_CHUNK 256
+#define LITERAL_MAX 32767
+#define REG_MAX 32775
+
 
 //static const int reg_count = NUM_REG;
 
@@ -18,11 +21,12 @@ static int r[NUM_REG];
 static uint16_t *stack;
 static uint16_t stack_size = 2 * STACK_CHUNK; 
 
+static uint16_t *spr; // Read Stack Pointer
+
 static uint16_t *mem;
 
 static bool run = 1;
 
-#define MAX_INT 32767
 
 void print_regs()
 {
@@ -43,6 +47,10 @@ bool grow_stack(uint16_t **sp)
     }
 
     stack_size += STACK_CHUNK;
+
+#ifdef DEBUG
+    printf("VM DEBUG: Growing Stack to %d\n",stack_size);
+#endif
 
     uint16_t *new_stack = realloc(stack, stack_size * sizeof *stack);
     if (!new_stack) {
@@ -74,7 +82,6 @@ void vm_push(uint16_t i)
 
 void setup_mem()
 {
-
     for(int i = 0; i < 100; ++i) {
         vm_push(noop);
     }
@@ -90,14 +97,23 @@ void setup_mem()
 
 int fetch()
 {
-    static uint16_t *sp = NULL;
-
-    if (sp == NULL || sp-stack > stack_size) {
-        sp = stack;
+    if (spr == NULL || spr-stack > stack_size) {
+        spr = stack;
     }
 
-    ++sp;
-    return *(sp-1);
+    uint16_t val = *spr++;
+
+    // val is register
+    if (val > LITERAL_MAX && val <= REG_MAX) {
+//        printf("register found: %d => %d\n",val, val-LITERAL_MAX-1);
+        val = r[val-LITERAL_MAX-1];
+    }
+    if (val > REG_MAX) {
+        val = fetch();
+    }
+
+    return val;
+
 }
 
 void inst_out()
@@ -105,20 +121,80 @@ void inst_out()
     printf("%c", fetch());
 }
 
+void inst_jmp()
+{
+    uint16_t dest = fetch();
+    spr = stack + dest;
+}
+
+// jt: 7 a b
+// if <a> is nonzero, jump to <b>
+void inst_jt()
+{
+	uint16_t a = fetch();
+   // printf("jmp if %d non-zero\n",a);
+	if (a != 0) {
+		inst_jmp();
+	} else {
+        // burn arg
+        fetch();
+	}
+}
+
+// jf: 8 a b
+//  if <a> is zero, jump to <b>
+void inst_jf()
+{
+    uint16_t a = fetch();
+    if (a == 0) {
+        inst_jmp();
+    } else {
+        // burn arg
+        fetch();
+    }
+}
+
+// set: 1 a b
+// set register <a> to the value of <b>
+void inst_set() {
+    uint16_t reg = fetch();
+    printf("reg: %d\n",reg);
+}
+
 void exec (instruction i)
 {
+ //   printf("\n%d\n",i);
     switch(i) {
 
         case halt:
             run = 0;
+            print_regs();
+            break;
+        case set:
+            inst_set();
             break;
 
+        case jmp:
+            inst_jmp();
+            break;
+
+        case jt:
+            inst_jt();
+            break;
+
+        case jf:
+            inst_jf();
+        break; 
+            
         case out:
             inst_out();
             break;
+        
+        case noop:
+            break;
 
         default:
-        case noop:
+            printf("%d\n",i);
             break;
     }
 
@@ -133,12 +209,22 @@ void run_vm()
 
 }
 
+void vm_read(const char *file) 
+{
+    FILE *bin = fopen(file, "r");
+    uint16_t r;
+    while (fread(&r, sizeof r, 1, bin) == 1) {
+        vm_push(r);
+    }
+    fclose(bin);
+}
+
+
 int main(int argc, const char **argv)
 {
-    mem = calloc(MAX_INT + 1, sizeof *mem);
+    printf("Initializing Synacor VM\n");
+    mem = calloc(LITERAL_MAX, sizeof *mem);
     stack = calloc(stack_size, sizeof *stack);
-
-    print_regs();
 
     printf("Mem base: %p\n", (void *)mem);
     printf("Stack   : %p\n", (void *)stack);
@@ -146,11 +232,12 @@ int main(int argc, const char **argv)
     const char *exec_str = NULL;
     if (argc > 1) {
         exec_str = argv[1];
-        printf ("%s\n",exec_str);
+        vm_read(exec_str);
     } else { 
         setup_mem();
     }
 
+    printf("RUNNING %s\n\n\n",exec_str);
     run_vm();
 
     free(mem);
