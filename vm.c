@@ -21,7 +21,7 @@ static int r[NUM_REG];
 static uint16_t *stack;
 static uint16_t stack_size = 2 * STACK_CHUNK; 
 
-static uint16_t *spr; // Read Stack Pointer
+static uint16_t *ip; // Read Stack Pointer
 static uint16_t *sp = NULL;
 
 
@@ -108,11 +108,7 @@ void setup_mem()
 
 int fetch()
 {
-    if (spr == NULL || spr-stack > stack_size) {
-        spr = stack;
-    }
-
-    uint16_t val = *spr++;
+    uint16_t val = *ip++;
 
     return val;
 }
@@ -141,7 +137,6 @@ bool vm_write(uint16_t dest, uint16_t val) {
     }
     return false;
 }
-
 
 // set: 1 a b
 // set register <a> to the value of <b>
@@ -191,7 +186,7 @@ void inst_gt()
 void inst_jmp()
 {
     uint16_t dest = vm_read(fetch());
-    spr = stack + dest;
+    ip = mem + dest;
 }
 
 // jt: 7 a b
@@ -287,7 +282,7 @@ void inst_rmem() {
 // call: 17 a
 // write the address of the next instruction to the stack and jump to <a>
 void inst_call() {
-    vm_push(spr-stack+1);
+    vm_push(ip-mem+1);
     inst_jmp();
 }
 
@@ -300,7 +295,7 @@ void inst_out()
 
 void exec (instruction i)
 {
- //  printf("%d\n",i);
+//   printf("%d\n",i);
     switch(i) {
 
         case halt:
@@ -390,16 +385,14 @@ void run_vm()
         instruction inst = fetch();
         exec(inst);
     }
-
 }
 
 void vm_load(const char *file) 
 {
     FILE *bin = fopen(file, "r");
     uint16_t r;
-    while (fread(&r, sizeof r, 1, bin) == 1) {
-        vm_push(r);
-    }
+    int read = fread(mem, sizeof r, LITERAL_MAX, bin); 
+    printf("read :%d\n",read);
     fclose(bin);
 }
 
@@ -409,6 +402,8 @@ int main(int argc, const char **argv)
     printf("Initializing Synacor VM\n");
     mem = calloc(LITERAL_MAX, sizeof *mem);
     stack = calloc(stack_size, sizeof *stack);
+
+    ip = mem;
 
     printf("Mem base: %p\n", (void *)mem);
     printf("Stack   : %p\n", (void *)stack);
