@@ -1,6 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
-#include <stdint.h>
+#include <inttypes.h>
 #include <stdbool.h>
 #include <errno.h>
 #include <limits.h>
@@ -13,7 +13,7 @@
 #define LITERAL_MAX 32767
 #define REG_MAX 32775
 
-
+#define REGISTER(X) (X-LITERAL_MAX-1)
 //static const int reg_count = NUM_REG;
 
 static int r[NUM_REG];
@@ -23,6 +23,8 @@ static uint16_t stack_size = 2 * STACK_CHUNK;
 
 static uint16_t *ip; // Read Stack Pointer
 static uint16_t *sp = NULL;
+
+static uint16_t bin_size;
 
 
 static uint16_t *mem;
@@ -91,21 +93,6 @@ uint16_t vm_pop()
     return i;
 }
 
-void setup_mem()
-{
-    for(int i = 0; i < 100; ++i) {
-        vm_push(noop);
-    }
-    vm_push(out);
-    vm_push('b');
-    vm_push(out);
-    vm_push('\n');
-    for (int i = 0; i < 921; i++) {
-        vm_push(noop);
-    }
-    vm_push(halt);
-}
-
 int fetch()
 {
     uint16_t val = *ip++;
@@ -124,9 +111,6 @@ uint16_t vm_read(uint16_t val) {
     if (is_register(val)) {
         val = r[val-LITERAL_MAX-1];
     }
-/*    if (val > REG_MAX) {
-        val = fetch();
-    } */
     return val;
 }
 
@@ -279,6 +263,14 @@ void inst_rmem() {
     vm_write(a, mem[b]);
 }
 
+// wmem: 16 a b
+// write the value from <b> into memory at address <a>
+void inst_wmem() {
+    uint16_t a = vm_read(fetch());
+    uint16_t b = vm_read(fetch());
+    mem[a] = b;
+}
+
 // call: 17 a
 // write the address of the next instruction to the stack and jump to <a>
 void inst_call() {
@@ -286,11 +278,31 @@ void inst_call() {
     inst_jmp();
 }
 
+// ret: 18
+// remove the top element from the stack and jump to it; empty stack = halt
+void inst_ret() {
+    if (sp - stack == 0) {
+        run = 0;
+    }
+    
+    uint16_t dest = vm_pop();
+    ip = mem + dest;
+}
+
 // out: 19 a
 // write the character represented by ascii code <a> to the terminal
 void inst_out()
 {
     printf("%c", vm_read(fetch()));
+}
+
+// //in: 20 a
+//  read a character from the terminal and write its ascii code to <a>; it can be assumed that once input starts, it will continue until a newline is encountered; this means that you can safely read whole lines from the keyboard and trust that they will be fully read
+void inst_in()
+{
+    uint16_t a = fetch();
+    uint16_t c = getchar();
+    vm_write(a, c);
 }
 
 void exec (instruction i)
@@ -347,7 +359,7 @@ void exec (instruction i)
             inst_mod();
             break;
 
-        case and:
+        case iand:
             inst_and();
             break;
 
@@ -363,18 +375,29 @@ void exec (instruction i)
             inst_rmem();
             break;
 
+        case wmem:
+            inst_wmem();
+            break;
+
         case call:
             inst_call();
+            break;
+
+        case ret:
+            inst_ret();
             break;
 
         case out:
             inst_out();
             break;
 
+        case in:
+            inst_in();
         case noop:
             break;
         
         default:
+            printf("%d\n",i);
             break;
     }
 }
@@ -391,9 +414,92 @@ void vm_load(const char *file)
 {
     FILE *bin = fopen(file, "r");
     uint16_t r;
-    int read = fread(mem, sizeof r, LITERAL_MAX, bin); 
+    int read = fread(mem, sizeof r, LITERAL_MAX-1, bin); 
+    bin_size = read;
     printf("read :%d\n",read);
     fclose(bin);
+}
+
+void inst_arg_f(FILE *fp, uint16_t arg) {
+    if (!is_register(arg)) {
+        fprintf(fp, " %u",  arg);
+    } else {
+        fprintf(fp, " r%d", REGISTER(arg));
+    }
+
+}
+
+void inst_out_arg_f(FILE *fp, uint16_t arg) {
+    if (!is_register(arg)) {
+        fprintf(fp, " %c",  arg);
+    } else {
+        fprintf(fp, " r%d", REGISTER(arg));
+    }
+}
+
+
+void dump_mem() {
+    FILE *dump = fopen("dump.out", "w+");
+    for (int i = 0; i < bin_size; i++) {
+        if (mem[i] < 22) {
+            fprintf(dump, "%05d %s",i ,instructions[mem[i]]);
+        } else {
+            fprintf(dump, "%05d %u", i, mem[i]);
+        }
+        switch ( mem[i] ) {
+            // no args
+            default:
+            case halt:
+            case ret:
+            case noop:
+            break;
+
+            // one
+            case push:
+            case pop:
+            case jmp:
+            case call:
+            case in:
+                inst_arg_f(dump, mem[i+1]);
+                i++;
+            break;
+
+            case out:
+                inst_out_arg_f(dump, mem[i+1]);
+                i++;
+            break;
+
+            // two
+            case set:
+            case jt:
+            case jf:
+            case not:
+            case rmem:
+            case wmem:
+                inst_arg_f(dump, mem[i+1]);
+                inst_arg_f(dump, mem[i+2]);
+//                fprintf(dump, " %u %u",  mem[i+1], mem[i+2]);
+                i +=2;
+            break;
+
+            // three
+            case eq:
+            case gt:
+            case add:
+            case mult:
+            case mod:
+            case iand:
+            case or:
+                inst_arg_f(dump, mem[i+1]);
+                inst_arg_f(dump, mem[i+2]);
+                inst_arg_f(dump, mem[i+3]);
+                //fprintf(dump, " %u %u %u",  mem[i+1], mem[i+2], mem[i+3]);
+                i +=3;
+            break;
+        }
+        fprintf(dump, "\n");
+    }
+    fclose(dump);
 }
 
 
@@ -412,11 +518,10 @@ int main(int argc, const char **argv)
     if (argc > 1) {
         exec_str = argv[1];
         vm_load(exec_str);
-    } else { 
-        setup_mem();
-    }
+    } 
 
     printf("RUNNING %s\n\n\n",exec_str);
+    dump_mem();
     run_vm();
 
     free(mem);

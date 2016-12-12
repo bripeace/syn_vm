@@ -11,7 +11,7 @@ typedef enum INST {
     add,
     mult,
     mod,
-    and,
+    iand,
     or,
     not,
     rmem,
@@ -22,3 +22,30 @@ typedef enum INST {
     in,
     noop
 } instruction;
+
+static const char instructions[][22] =
+{
+    [halt] = "halt",
+    [set] = "set",
+    [push] = "push",
+    [pop] = "pop",
+    [eq] = "eq",
+    [gt] = "gt",
+    [jmp] = "jmp",
+    [jt] = "jt",
+    [jf] = "jf",
+    [add] = "add",
+    [mult] = "mult",
+    [mod] = "mod",
+    [iand] = "iand",
+    [or] = "or",
+    [not] = "not",
+    [rmem] = "rmem",
+    [wmem] = "wmem",
+    [call] = "call",
+    [ret] = "ret",
+    [out] = "out",
+    [in] = "in",
+    [noop] = "noop",
+};
+
